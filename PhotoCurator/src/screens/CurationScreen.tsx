@@ -21,7 +21,7 @@ import {
   RankedPhoto
 } from '../types';
 import { CurationService } from '../services/curation';
-import { CurationGoalSelector, CurationResultsView } from '../components/curation';
+import { CurationGoalSelector, CurationResultsView, CurationExportView } from '../components/curation';
 
 interface CurationScreenProps {
   clusters: PhotoCluster[];
@@ -84,16 +84,41 @@ export const CurationScreen: React.FC<CurationScreenProps> = ({
     try {
       await curationService.processFeedback(feedback);
       
-      // Show feedback confirmation
-      const actionText = feedback.action === 'favorite' ? 'favorited' : 
-                        feedback.action === 'keep' ? 'kept' : 'discarded';
-      Alert.alert('Feedback Received', `Photo ${actionText}. This will help improve future recommendations.`);
-      
       // Optionally re-curate to show updated results
       // handleCurate();
     } catch (error) {
       console.error('Failed to process feedback:', error);
       Alert.alert('Error', 'Failed to process feedback. Please try again.');
+    }
+  };
+
+  const handleExport = async (options: any, photos: RankedPhoto[]) => {
+    try {
+      // Mock export functionality - in real implementation this would:
+      // 1. Create album/folder based on options.format
+      // 2. Copy/export photos with specified quality
+      // 3. Include metadata if requested
+      // 4. Add ranking info if requested
+      
+      console.log('Exporting photos:', {
+        count: photos.length,
+        format: options.format,
+        quality: options.quality,
+        includeMetadata: options.includeMetadata,
+        includeRankings: options.includeRankings
+      });
+
+      // Simulate export delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // In real implementation, would use platform-specific APIs:
+      // - iOS: Photos framework, CameraRoll API
+      // - Android: MediaStore API, SAF (Storage Access Framework)
+      // - Cross-platform: react-native-fs, react-native-share
+      
+    } catch (error) {
+      console.error('Export failed:', error);
+      throw error;
     }
   };
 
@@ -226,10 +251,14 @@ export const CurationScreen: React.FC<CurationScreenProps> = ({
         {curationResult && !isProcessing && (
           <CurationResultsView
             result={curationResult}
+            clusters={clusters}
             onPhotoPress={handlePhotoPress}
             onFeedback={handleFeedback}
+            onExport={handleExport}
             showRankings={true}
             showReasons={true}
+            showComparison={true}
+            showExport={true}
           />
         )}
       </ScrollView>

@@ -11,21 +11,29 @@ import {
   Image,
   StyleSheet,
   Dimensions,
-  Modal
+  Modal,
+  Alert
 } from 'react-native';
 import {
   CurationResult,
   RankedPhoto,
   CurationGoal,
-  UserFeedback
+  UserFeedback,
+  PhotoCluster
 } from '../../types';
+import { PhotoComparisonView } from './PhotoComparisonView';
+import { CurationExportView } from './CurationExportView';
 
 interface CurationResultsViewProps {
   result: CurationResult;
+  clusters?: PhotoCluster[];
   onPhotoPress?: (photo: RankedPhoto) => void;
   onFeedback?: (feedback: UserFeedback) => void;
+  onExport?: (options: any, photos: RankedPhoto[]) => Promise<void>;
   showRankings?: boolean;
   showReasons?: boolean;
+  showComparison?: boolean;
+  showExport?: boolean;
 }
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -33,13 +41,20 @@ const photoSize = (screenWidth - 60) / 3; // 3 photos per row with margins
 
 export const CurationResultsView: React.FC<CurationResultsViewProps> = ({
   result,
+  clusters = [],
   onPhotoPress,
   onFeedback,
+  onExport,
   showRankings = true,
-  showReasons = true
+  showReasons = true,
+  showComparison = true,
+  showExport = true
 }) => {
   const [selectedPhoto, setSelectedPhoto] = useState<RankedPhoto | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [showComparisonView, setShowComparisonView] = useState(false);
+  const [showExportView, setShowExportView] = useState(false);
+  const [selectedCluster, setSelectedCluster] = useState<PhotoCluster | null>(null);
 
   const handlePhotoPress = (rankedPhoto: RankedPhoto) => {
     setSelectedPhoto(rankedPhoto);
@@ -64,6 +79,29 @@ export const CurationResultsView: React.FC<CurationResultsViewProps> = ({
     onFeedback?.(feedback);
     setShowDetails(false);
     setSelectedPhoto(null);
+
+    // Show feedback confirmation
+    const actionText = action === 'favorite' ? 'favorited' : 
+                      action === 'keep' ? 'kept' : 'discarded';
+    Alert.alert('Feedback Received', `Photo ${actionText}. This will help improve future recommendations.`);
+  };
+
+  const handleComparePhotos = (photo: RankedPhoto) => {
+    // Find the cluster containing this photo
+    const cluster = clusters.find(c => 
+      c.photos.some(p => p.id === photo.photo.id)
+    );
+    
+    if (cluster) {
+      setSelectedCluster(cluster);
+      setShowComparisonView(true);
+    } else {
+      Alert.alert('Comparison Unavailable', 'Cannot find cluster information for this photo.');
+    }
+  };
+
+  const handleExport = () => {
+    setShowExportView(true);
   };
 
   const getGoalDisplayName = (goal: CurationGoal): string => {
@@ -120,6 +158,27 @@ export const CurationResultsView: React.FC<CurationResultsViewProps> = ({
                 {(rankedPhoto.score * 100).toFixed(0)}
               </Text>
             </View>
+
+            {/* Enhanced ranking indicators */}
+            {rankedPhoto.rank <= 3 && (
+              <View style={styles.topRankIndicator}>
+                <Text style={styles.topRankText}>
+                  {rankedPhoto.rank === 1 ? '🥇' : rankedPhoto.rank === 2 ? '🥈' : '🥉'}
+                </Text>
+              </View>
+            )}
+
+            {showComparison && (
+              <TouchableOpacity
+                style={styles.compareButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleComparePhotos(rankedPhoto);
+                }}
+              >
+                <Text style={styles.compareButtonText}>⚖️</Text>
+              </TouchableOpacity>
+            )}
           </TouchableOpacity>
         ))}
       </View>
@@ -129,15 +188,26 @@ export const CurationResultsView: React.FC<CurationResultsViewProps> = ({
   const renderHeader = () => {
     return (
       <View style={styles.header}>
-        <Text style={styles.title}>
-          {getGoalDisplayName(result.goal)} Curation
-        </Text>
-        <Text style={styles.subtitle}>
-          {result.selectedPhotos.length} of {result.totalPhotos} photos selected
-        </Text>
-        <Text style={styles.processingTime}>
-          Processed in {result.processingTime}ms
-        </Text>
+        <View style={styles.headerContent}>
+          <Text style={styles.title}>
+            {getGoalDisplayName(result.goal)} Curation
+          </Text>
+          <Text style={styles.subtitle}>
+            {result.selectedPhotos.length} of {result.totalPhotos} photos selected
+          </Text>
+          <Text style={styles.processingTime}>
+            Processed in {result.processingTime}ms
+          </Text>
+        </View>
+        
+        {showExport && (
+          <TouchableOpacity
+            style={styles.exportButton}
+            onPress={handleExport}
+          >
+            <Text style={styles.exportButtonText}>Export</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   };
@@ -292,6 +362,42 @@ export const CurationResultsView: React.FC<CurationResultsViewProps> = ({
       {renderWeights()}
       {renderPhotoGrid()}
       {renderPhotoDetails()}
+      
+      {/* Comparison View Modal */}
+      {selectedCluster && (
+        <Modal
+          visible={showComparisonView}
+          animationType="slide"
+          presentationStyle="fullScreen"
+          onRequestClose={() => setShowComparisonView(false)}
+        >
+          <PhotoComparisonView
+            cluster={selectedCluster}
+            rankedPhotos={result.selectedPhotos.filter(rp => 
+              selectedCluster.photos.some(p => p.id === rp.photo.id)
+            )}
+            onFeedback={onFeedback}
+            onPhotoSelect={onPhotoPress}
+            curationGoal={result.goal}
+          />
+          <TouchableOpacity
+            style={styles.closeComparisonButton}
+            onPress={() => setShowComparisonView(false)}
+          >
+            <Text style={styles.closeComparisonText}>Close Comparison</Text>
+          </TouchableOpacity>
+        </Modal>
+      )}
+
+      {/* Export View Modal */}
+      {showExport && (
+        <CurationExportView
+          curationResult={result}
+          onExport={onExport}
+          visible={showExportView}
+          onClose={() => setShowExportView(false)}
+        />
+      )}
     </ScrollView>
   );
 };
@@ -302,10 +408,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5'
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     padding: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0'
+  },
+  headerContent: {
+    flex: 1
   },
   title: {
     fontSize: 24,
@@ -495,5 +607,55 @@ const styles = StyleSheet.create({
   },
   favoriteButton: {
     backgroundColor: '#FF9800'
+  },
+  exportButton: {
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8
+  },
+  exportButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600'
+  },
+  topRankIndicator: {
+    position: 'absolute',
+    top: 5,
+    left: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 10,
+    paddingHorizontal: 4,
+    paddingVertical: 2
+  },
+  topRankText: {
+    fontSize: 12
+  },
+  compareButton: {
+    position: 'absolute',
+    bottom: 5,
+    right: 5,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2
+  },
+  compareButtonText: {
+    fontSize: 12
+  },
+  closeComparisonButton: {
+    position: 'absolute',
+    bottom: 50,
+    left: 20,
+    right: 20,
+    backgroundColor: '#007AFF',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center'
+  },
+  closeComparisonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600'
   }
 });

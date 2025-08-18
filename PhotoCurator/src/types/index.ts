@@ -16,6 +16,9 @@ export * from './editing';
 // Background processing types
 export * from './background';
 
+// Authentication types
+export * from './auth';
+
 // Common utility types
 export interface ApiResponse<T> {
   data: T;
