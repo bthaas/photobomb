@@ -19,6 +19,9 @@ export * from './background';
 // Authentication types
 export * from './auth';
 
+// Error types
+export * from './error';
+
 // Common utility types
 export interface ApiResponse<T> {
   data: T;

@@ -30,6 +30,18 @@ export class TensorFlowSetup {
 
   private static async performInitialization(): Promise<void> {
     try {
+      console.log('Initializing TensorFlow.js for React Native...');
+      
+      // Initialize the React Native platform
+      try {
+        const platformAdapter = require('@tensorflow/tfjs-react-native');
+        if (platformAdapter.initializeAsync) {
+          await platformAdapter.initializeAsync();
+        }
+      } catch (platformError) {
+        console.warn('React Native platform adapter initialization failed, continuing with fallback:', platformError);
+      }
+
       // Wait for TensorFlow.js to be ready
       await tf.ready();
 
@@ -42,12 +54,14 @@ export class TensorFlowSetup {
 
       // Verify backend is available
       const backend = tf.getBackend();
-      console.log(`TensorFlow.js initialized with backend: ${backend}`);
+      console.log(`TensorFlow.js initialized successfully with backend: ${backend}`);
 
       this.isInitialized = true;
     } catch (error) {
       console.error('Failed to initialize TensorFlow.js:', error);
-      throw new Error(`TensorFlow.js initialization failed: ${error}`);
+      // Don't throw error, allow app to continue without AI features
+      console.warn('AI features will be disabled due to TensorFlow.js initialization failure');
+      this.isInitialized = false;
     }
   }
 

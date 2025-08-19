@@ -379,6 +379,61 @@ export class PhotoRepository {
   }
 
   /**
+   * Get all photos (for sync service)
+   */
+  public async getAllPhotos(): Promise<Photo[]> {
+    return this.find({}, { field: 'created_at', direction: 'ASC' }, 10000, 0);
+  }
+
+  /**
+   * Get curated photos (for sync service)
+   */
+  public async getCuratedPhotos(): Promise<Photo[]> {
+    // Assuming curated photos are those with high quality scores or specific sync status
+    return this.find({ qualityThreshold: 0.7 }, { field: 'quality_overall', direction: 'DESC' }, 1000, 0);
+  }
+
+  /**
+   * Get photos for sync (pending sync status)
+   */
+  public async getPhotosForSync(): Promise<Photo[]> {
+    return this.find({ syncStatus: 'pending' }, { field: 'updated_at', direction: 'ASC' }, 1000, 0);
+  }
+
+  /**
+   * Get photos that need metadata sync
+   */
+  public async getPhotosForMetadataSync(): Promise<Photo[]> {
+    return this.find({ hasFeatures: true, syncStatus: 'pending' }, { field: 'updated_at', direction: 'ASC' }, 100, 0);
+  }
+
+  /**
+   * Get photo by ID (alias for sync service)
+   */
+  public async getPhoto(id: string): Promise<Photo | null> {
+    return this.findById(id);
+  }
+
+  /**
+   * Save photo (alias for sync service)
+   */
+  public async savePhoto(photo: Photo): Promise<void> {
+    const existing = await this.findById(photo.id);
+    if (existing) {
+      await this.update(photo.id, photo);
+    } else {
+      await this.create(photo);
+    }
+  }
+
+  /**
+   * Update photo (alias for sync service)
+   */
+  public async updatePhoto(id: string, updates: Partial<Photo>): Promise<void> {
+    await this.update(id, updates);
+  }
+
+  /**
    * Insert faces for a photo
    */
   private async insertFaces(photoId: string, faces: Face[]): Promise<void> {

@@ -13,9 +13,19 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     let jsCodeLocation: URL
     
     #if DEBUG
-    jsCodeLocation = RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: "index")!
+    if let bundleURL = RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: "index") {
+      jsCodeLocation = bundleURL
+    } else {
+      // Fallback to localhost if Metro isn't running
+      jsCodeLocation = URL(string: "http://localhost:8081/index.bundle?platform=ios")!
+    }
     #else
-    jsCodeLocation = Bundle.main.url(forResource: "main", withExtension: "jsbundle")!
+    if let bundleURL = Bundle.main.url(forResource: "main", withExtension: "jsbundle") {
+      jsCodeLocation = bundleURL
+    } else {
+      // This should not happen in production, but provide a fallback
+      jsCodeLocation = URL(string: "http://localhost:8081/index.bundle?platform=ios")!
+    }
     #endif
     
     let rootView = RCTRootView(bundleURL: jsCodeLocation, moduleName: "PhotoCurator", initialProperties: nil, launchOptions: launchOptions)

@@ -10,7 +10,17 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withSequence,
+  runOnJS,
+} from 'react-native-reanimated';
 import { Photo } from '../../types';
+import { HapticService, AnimationService } from '../../services/ui';
+import { LoadingState, FluidTransition } from '../ui';
 
 interface PhotoGridViewProps {
   photos: Photo[];
@@ -44,50 +54,83 @@ const PhotoItem: React.FC<PhotoItemProps> = React.memo(({
   itemSize,
   showQualityIndicator,
 }) => {
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(1);
   const qualityScore = photo.qualityScore?.overall;
   const hasHighQuality = qualityScore && qualityScore > 0.8;
+
+  const handlePress = useCallback(() => {
+    HapticService.light();
+    
+    // Quick scale animation for feedback
+    scale.value = withSequence(
+      withTiming(0.95, { duration: 100 }),
+      withTiming(1, { duration: 100 })
+    );
+    
+    runOnJS(onPress)();
+  }, [onPress, scale]);
+
+  const handleLongPress = useCallback(() => {
+    HapticService.medium();
+    
+    // Pulse animation for long press
+    scale.value = withSequence(
+      withTiming(1.05, { duration: 200 }),
+      withTiming(1, { duration: 200 })
+    );
+    
+    runOnJS(onLongPress)();
+  }, [onLongPress, scale]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
   
   return (
-    <TouchableOpacity
-      style={[styles.photoItem, { width: itemSize, height: itemSize }]}
-      onPress={onPress}
-      onLongPress={onLongPress}
-      activeOpacity={0.8}
-    >
-      <Image
-        source={{ uri: photo.uri }}
-        style={styles.photoImage}
-        resizeMode="cover"
-      />
-      
-      {/* Quality indicator */}
-      {showQualityIndicator && hasHighQuality && (
-        <View style={styles.qualityBadge}>
-          <Text style={styles.qualityBadgeText}>★</Text>
-        </View>
-      )}
-      
-      {/* Face count indicator */}
-      {photo.faces && photo.faces.length > 0 && (
-        <View style={styles.faceBadge}>
-          <Text style={styles.faceBadgeText}>{photo.faces.length}</Text>
-        </View>
-      )}
-      
-      {/* Selection overlay */}
-      {isSelected && (
-        <View style={styles.selectionOverlay}>
-          <View style={styles.checkmark}>
-            <Text style={styles.checkmarkText}>✓</Text>
+    <Animated.View style={[styles.photoItem, { width: itemSize, height: itemSize }, animatedStyle]}>
+      <TouchableOpacity
+        style={styles.touchable}
+        onPress={handlePress}
+        onLongPress={handleLongPress}
+        activeOpacity={1}
+      >
+        <Image
+          source={{ uri: photo.uri }}
+          style={styles.photoImage}
+          resizeMode="cover"
+        />
+        
+        {/* Quality indicator */}
+        <FluidTransition visible={showQualityIndicator && hasHighQuality} type="scaleAndFade">
+          <View style={styles.qualityBadge}>
+            <Text style={styles.qualityBadgeText}>★</Text>
           </View>
-        </View>
-      )}
-      
-      {/* Cluster indicator */}
-      {photo.clusterId && (
-        <View style={styles.clusterIndicator} />
-      )}
-    </TouchableOpacity>
+        </FluidTransition>
+        
+        {/* Face count indicator */}
+        <FluidTransition visible={!!(photo.faces && photo.faces.length > 0)} type="scaleAndFade">
+          <View style={styles.faceBadge}>
+            <Text style={styles.faceBadgeText}>{photo.faces?.length || 0}</Text>
+          </View>
+        </FluidTransition>
+        
+        {/* Selection overlay */}
+        <FluidTransition visible={isSelected} type="fade" duration={200}>
+          <View style={styles.selectionOverlay}>
+            <View style={styles.checkmark}>
+              <Text style={styles.checkmarkText}>✓</Text>
+            </View>
+          </View>
+        </FluidTransition>
+        
+        {/* Cluster indicator */}
+        <FluidTransition visible={!!photo.clusterId} type="scale">
+          <View style={styles.clusterIndicator} />
+        </FluidTransition>
+      </TouchableOpacity>
+    </Animated.View>
   );
 });
 
@@ -181,8 +224,7 @@ export const PhotoGridView: React.FC<PhotoGridViewProps> = ({
   if (loading && photos.length === 0) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Loading photos...</Text>
+        <LoadingState type="spinner" size="large" message="Loading photos..." />
       </View>
     );
   }
@@ -271,6 +313,18 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#f0f0f0',
     position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 2,
+  },
+  touchable: {
+    width: '100%',
+    height: '100%',
   },
   photoImage: {
     width: '100%',
