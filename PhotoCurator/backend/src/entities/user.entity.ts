@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  OneToMany,
+} from 'typeorm';
 import { ObjectType, Field, ID } from '@nestjs/graphql';
 import { Photo } from './photo.entity';
 
@@ -14,7 +21,7 @@ export class User {
   email: string;
 
   @Column()
-  password: string;
+  password: string; // Not exposed in GraphQL
 
   @Field({ nullable: true })
   @Column({ nullable: true })
@@ -25,8 +32,12 @@ export class User {
   lastName?: string;
 
   @Field()
-  @Column({ default: true })
-  isActive: boolean;
+  @Column({ default: 'free' })
+  subscriptionType: 'free' | 'premium';
+
+  @Field({ nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
+  subscriptionExpiresAt?: Date;
 
   @Field()
   @CreateDateColumn()
@@ -36,7 +47,20 @@ export class User {
   @UpdateDateColumn()
   updatedAt: Date;
 
+  // Relations
   @Field(() => [Photo])
   @OneToMany(() => Photo, photo => photo.user)
   photos: Photo[];
+
+  // User preferences (stored as JSON)
+  @Field({ nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
+  preferences?: {
+    defaultCurationGoal?: string;
+    autoAnalyze?: boolean;
+    backgroundProcessing?: boolean;
+    hapticFeedback?: boolean;
+    cloudSync?: boolean;
+    privacyMode?: boolean;
+  };
 }

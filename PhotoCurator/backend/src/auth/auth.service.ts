@@ -1,76 +1,90 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 
-import { UsersService } from '../users/users.service';
 import { User } from '../entities/user.entity';
-import { LoginInput } from './dto/login.input';
 import { RegisterInput } from './dto/register.input';
+import { LoginInput } from './dto/login.input';
 import { AuthResponse } from './dto/auth.response';
 
 @Injectable()
 export class AuthService {
   constructor(
-    private usersService: UsersService,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
     private jwtService: JwtService,
   ) {}
 
-  async validateUser(email: string, password: string): Promise<User | null> {
-    const user = await this.usersService.findByEmail(email);
-    if (user && await bcrypt.compare(password, user.password)) {
-      return user;
+  async register(registerInput: RegisterInput): Promise<AuthResponse> {
+    const { email, password, firstName, lastName } = registerInput;
+
+    // Check if user already exists
+    const existingUser = await this.userRepository.findOne({ where: { email } });
+    if (existingUser) {
+      throw new UnauthorizedException('User with this email already exists');
     }
-    return null;
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    // Create user
+    const user = this.userRepository.create({
+      email,
+      password: hashedPassword,
+      firstName,
+      lastName,
+      preferences: {
+        defaultCurationGoal: 'best_shots',
+        autoAnalyze: true,
+        backgroundProcessing: true,
+        hapticFeedback: true,
+        cloudSync: false,
+        privacyMode: false,
+      },
+    });
+
+    const savedUser = await this.userRepository.save(user);
+
+    // Generate JWT
+    const token = this.jwtService.sign({ userId: savedUser.id });
+
+    return {
+      user: savedUser,
+      token,
+    };
   }
 
   async login(loginInput: LoginInput): Promise<AuthResponse> {
-    const user = await this.validateUser(loginInput.email, loginInput.password);
+    const { email, password } = loginInput;
+
+    // Find user
+    const user = await this.userRepository.findOne({ where: { email } });
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const payload = { email: user.email, sub: user.id };
-    const accessToken = this.jwtService.sign(payload);
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Generate JWT
+    const token = this.jwtService.sign({ userId: user.id });
 
     return {
-      accessToken,
       user,
+      token,
     };
   }
 
-  async register(registerInput: RegisterInput): Promise<AuthResponse> {
-    // Check if user already exists
-    const existingUser = await this.usersService.findByEmail(registerInput.email);
-    if (existingUser) {
-      throw new UnauthorizedException('User already exists');
+  async validateUser(userId: string): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
     }
-
-    // Hash password
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(registerInput.password, saltRounds);
-
-    // Create user
-    const user = await this.usersService.create({
-      ...registerInput,
-      password: hashedPassword,
-    });
-
-    // Generate JWT token
-    const payload = { email: user.email, sub: user.id };
-    const accessToken = this.jwtService.sign(payload);
-
-    return {
-      accessToken,
-      user,
-    };
-  }
-
-  async validateToken(token: string): Promise<User | null> {
-    try {
-      const payload = this.jwtService.verify(token);
-      return await this.usersService.findById(payload.sub);
-    } catch {
-      return null;
-    }
+    return user;
   }
 }

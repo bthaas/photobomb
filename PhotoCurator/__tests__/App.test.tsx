@@ -1,10 +1,13 @@
-import React from 'react';
-import {render} from '@testing-library/react-native';
-import App from '../src/App';
+/**
+ * @format
+ */
 
-describe('App', () => {
-  it('renders without crashing', () => {
-    const component = render(<App />);
-    expect(component).toBeTruthy();
+import React from 'react';
+import ReactTestRenderer from 'react-test-renderer';
+import App from '../App';
+
+test('renders correctly', async () => {
+  await ReactTestRenderer.act(() => {
+    ReactTestRenderer.create(<App />);
   });
 });
