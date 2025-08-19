@@ -1,5 +1,13 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
-import { ObjectType, Field, ID, Float, Int } from '@nestjs/graphql';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
+import { ObjectType, Field, ID, Int, Float } from '@nestjs/graphql';
 import { User } from './user.entity';
 
 @ObjectType()
@@ -11,23 +19,15 @@ export class Photo {
 
   @Field()
   @Column()
-  originalFilename: string;
+  filename: string;
 
   @Field()
   @Column()
-  s3Key: string;
+  originalUri: string; // Original photo URI from device
 
-  @Field()
-  @Column()
-  s3Bucket: string;
-
-  @Field()
-  @Column()
-  mimeType: string;
-
-  @Field(() => Int)
-  @Column()
-  fileSize: number;
+  @Field({ nullable: true })
+  @Column({ nullable: true })
+  cloudUri?: string; // S3 or cloud storage URI
 
   @Field(() => Int)
   @Column()
@@ -37,71 +37,77 @@ export class Photo {
   @Column()
   height: number;
 
-  @Field({ nullable: true })
-  @Column('jsonb', { nullable: true })
-  exifData?: any;
-
-  @Field({ nullable: true })
-  @Column('jsonb', { nullable: true })
-  location?: {
-    latitude: number;
-    longitude: number;
-    address?: string;
-  };
-
-  @Field({ nullable: true })
-  @Column({ nullable: true })
-  takenAt?: Date;
-
-  // AI Analysis Results
-  @Column('text', { nullable: true })
-  embedding?: string; // Store as JSON string for vector data
-
-  @Field(() => Float, { nullable: true })
-  @Column('float', { nullable: true })
-  qualityScore?: number;
-
-  @Field(() => Float, { nullable: true })
-  @Column('float', { nullable: true })
-  compositionScore?: number;
-
-  @Field(() => Float, { nullable: true })
-  @Column('float', { nullable: true })
-  contentScore?: number;
-
-  @Field({ nullable: true })
-  @Column('jsonb', { nullable: true })
-  detectedObjects?: any[];
-
-  @Field({ nullable: true })
-  @Column('jsonb', { nullable: true })
-  detectedFaces?: any[];
-
-  @Field({ nullable: true })
-  @Column('jsonb', { nullable: true })
-  dominantColors?: string[];
-
-  // Clustering and Curation
-  @Field({ nullable: true })
-  @Column({ nullable: true })
-  clusterId?: string;
-
-  @Field(() => Float, { nullable: true })
-  @Column('float', { nullable: true })
-  curationRank?: number;
+  @Field(() => Int)
+  @Column()
+  fileSize: number;
 
   @Field()
+  @Column({ type: 'timestamp' })
+  capturedAt: Date;
+
+  @Field({ nullable: true })
+  @Column({ type: 'decimal', precision: 10, scale: 8, nullable: true })
+  latitude?: number;
+
+  @Field({ nullable: true })
+  @Column({ type: 'decimal', precision: 11, scale: 8, nullable: true })
+  longitude?: number;
+
+  // AI Analysis Results
+  @Field(() => Float, { nullable: true })
+  @Column({ type: 'float', nullable: true })
+  overallScore?: number;
+
+  @Field(() => Float, { nullable: true })
+  @Column({ type: 'float', nullable: true })
+  technicalScore?: number;
+
+  @Field(() => Float, { nullable: true })
+  @Column({ type: 'float', nullable: true })
+  compositionalScore?: number;
+
+  @Field(() => Float, { nullable: true })
+  @Column({ type: 'float', nullable: true })
+  contentScore?: number;
+
+  @Field(() => Int, { nullable: true })
+  @Column({ nullable: true })
+  faceCount?: number;
+
+  // Visual embedding for similarity search (using pgvector extension)
+  @Column({ type: 'vector', length: 128, nullable: true })
+  visualEmbedding?: number[];
+
+  // User actions
+  @Field()
   @Column({ default: false })
-  isCurated: boolean;
+  isFavorite: boolean;
 
   @Field()
   @Column({ default: false })
   isDeleted: boolean;
 
-  // Sync Status
-  @Field()
-  @Column({ default: 'pending' })
-  syncStatus: 'pending' | 'synced' | 'failed';
+  @Field(() => [String])
+  @Column({ type: 'text', array: true, default: [] })
+  tags: string[];
+
+  // Analysis metadata
+  @Field({ nullable: true })
+  @Column({ type: 'jsonb', nullable: true })
+  analysisMetadata?: {
+    faces?: Array<{
+      boundingBox: { x: number; y: number; width: number; height: number };
+      confidence: number;
+      personId?: string;
+    }>;
+    objects?: Array<{
+      label: string;
+      confidence: number;
+      boundingBox: { x: number; y: number; width: number; height: number };
+    }>;
+    isAnalyzed: boolean;
+    analysisTimestamp: number;
+  };
 
   @Field()
   @CreateDateColumn()
@@ -111,6 +117,7 @@ export class Photo {
   @UpdateDateColumn()
   updatedAt: Date;
 
+  // Relations
   @Field(() => User)
   @ManyToOne(() => User, user => user.photos)
   @JoinColumn({ name: 'userId' })

@@ -5,7 +5,7 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
-  // Enable CORS for mobile app
+  // Enable CORS for React Native app
   app.enableCors({
     origin: true,
     credentials: true,
@@ -13,14 +13,16 @@ async function bootstrap() {
   
   // Enable validation pipes
   app.useGlobalPipes(new ValidationPipe({
-    transform: true,
     whitelist: true,
     forbidNonWhitelisted: true,
+    transform: true,
   }));
   
   const port = process.env.PORT || 3000;
   await app.listen(port);
-  console.log(`Application is running on: ${await app.getUrl()}`);
+  
+  console.log(`🚀 AI Photo Curator Backend running on port ${port}`);
+  console.log(`📊 GraphQL Playground: http://localhost:${port}/graphql`);
 }
 
 bootstrap();

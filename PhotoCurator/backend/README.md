@@ -1,322 +1,229 @@
-# Photo Curator Backend API
+# AI Photo Curator Backend
 
-A NestJS-based GraphQL API for the AI Photo Curator mobile application, providing user authentication, photo metadata management, and cloud synchronization capabilities.
+A NestJS-based GraphQL API for the AI Photo Curator application, providing user authentication, photo management, and cloud synchronization capabilities.
 
-## Features
+## 🚀 Features
 
-- **GraphQL API** with type-safe schema generation
-- **JWT Authentication** with secure token management
-- **PostgreSQL Database** with pgvector extension for similarity search
-- **S3 File Upload** with presigned URLs for secure file handling
-- **Photo Metadata Management** with AI analysis result storage
-- **Sync Service** for cross-device photo synchronization
-- **Vector Similarity Search** for finding similar photos
+- **GraphQL API** - Modern, efficient API with type safety
+- **User Authentication** - JWT-based authentication system
+- **Photo Management** - Store and manage photo metadata and AI analysis results
+- **Cloud Sync** - Synchronize data across devices
+- **PostgreSQL + pgvector** - Efficient storage with vector similarity search
+- **Type Safety** - Full TypeScript support
 
-## Tech Stack
+## 🛠️ Tech Stack
 
-- **NestJS** - Progressive Node.js framework
-- **GraphQL** - Query language and runtime
-- **TypeORM** - Object-relational mapping
+- **NestJS** - Scalable Node.js framework
+- **GraphQL** - API query language
+- **TypeORM** - Database ORM with TypeScript support
 - **PostgreSQL** - Primary database with pgvector extension
-- **AWS S3** - File storage service
-- **JWT** - JSON Web Token authentication
-- **Jest** - Testing framework
+- **JWT** - Authentication tokens
+- **bcryptjs** - Password hashing
 
-## Prerequisites
+## 📋 Prerequisites
 
-- Node.js 18+ 
-- PostgreSQL 14+ with pgvector extension
-- AWS account with S3 access
-- npm or yarn package manager
+- Node.js 16+
+- PostgreSQL 12+ with pgvector extension
+- npm or yarn
 
-## Installation
+## 🚀 Quick Start
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd PhotoCurator/backend
-   ```
+### 1. Install Dependencies
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+\`\`\`bash
+npm install
+\`\`\`
 
-3. **Set up environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
+### 2. Database Setup
 
-4. **Set up PostgreSQL with pgvector**
-   ```sql
-   -- Connect to your PostgreSQL instance
-   CREATE DATABASE photo_curator;
-   \c photo_curator;
-   CREATE EXTENSION vector;
-   ```
+Create a PostgreSQL database and enable the pgvector extension:
 
-5. **Run database migrations**
-   ```bash
-   npm run start:dev
-   # Database tables will be created automatically in development
-   ```
+\`\`\`sql
+CREATE DATABASE photo_curator;
+\\c photo_curator;
+CREATE EXTENSION IF NOT EXISTS vector;
+\`\`\`
 
-## Configuration
+### 3. Environment Configuration
 
-### Environment Variables
+Copy the environment template and configure your settings:
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DB_HOST` | PostgreSQL host | `localhost` |
-| `DB_PORT` | PostgreSQL port | `5432` |
-| `DB_USERNAME` | Database username | `postgres` |
-| `DB_PASSWORD` | Database password | `password` |
-| `DB_NAME` | Database name | `photo_curator` |
-| `JWT_SECRET` | JWT signing secret | Required |
-| `JWT_EXPIRES_IN` | Token expiration | `7d` |
-| `AWS_ACCESS_KEY_ID` | AWS access key | Required |
-| `AWS_SECRET_ACCESS_KEY` | AWS secret key | Required |
-| `AWS_REGION` | AWS region | `us-east-1` |
-| `S3_BUCKET_NAME` | S3 bucket name | Required |
-| `PORT` | Server port | `3000` |
+\`\`\`bash
+cp .env.example .env
+\`\`\`
 
-### Database Setup
+Update the \`.env\` file with your database credentials and JWT secret.
 
-The application uses PostgreSQL with the pgvector extension for storing and querying image embeddings:
+### 4. Start Development Server
 
-```sql
--- Install pgvector extension
-CREATE EXTENSION vector;
+\`\`\`bash
+npm run start:dev
+\`\`\`
 
--- Example vector similarity query
-SELECT id, (embedding <-> '[0.1,0.2,0.3,...]'::vector) as distance 
-FROM photos 
-ORDER BY distance ASC 
-LIMIT 10;
-```
+The API will be available at:
+- **GraphQL Playground**: http://localhost:3000/graphql
+- **API Endpoint**: http://localhost:3000/graphql
 
-## API Documentation
-
-### GraphQL Playground
-
-When running in development mode, access the GraphQL playground at:
-```
-http://localhost:3000/graphql
-```
+## 📚 API Documentation
 
 ### Authentication
 
-All protected endpoints require a JWT token in the Authorization header:
-```
-Authorization: Bearer <your-jwt-token>
-```
-
-### Key Mutations
-
-**User Registration**
-```graphql
-mutation Register($registerInput: RegisterInput!) {
-  register(registerInput: $registerInput) {
-    accessToken
+#### Register User
+\`\`\`graphql
+mutation {
+  register(input: {
+    email: "user@example.com"
+    password: "securepassword"
+    firstName: "John"
+    lastName: "Doe"
+  }) {
     user {
       id
       email
       firstName
       lastName
     }
+    token
   }
 }
-```
+\`\`\`
 
-**User Login**
-```graphql
-mutation Login($loginInput: LoginInput!) {
-  login(loginInput: $loginInput) {
-    accessToken
+#### Login
+\`\`\`graphql
+mutation {
+  login(input: {
+    email: "user@example.com"
+    password: "securepassword"
+  }) {
     user {
       id
       email
     }
+    token
   }
 }
-```
+\`\`\`
 
-**Sync Photo Metadata**
-```graphql
-mutation SyncPhotoMetadata($photoId: String!, $metadata: SyncMetadataInput!) {
-  syncPhotoMetadata(photoId: $photoId, metadata: $metadata)
-}
-```
+### User Management
 
-### Key Queries
-
-**Get User Photos**
-```graphql
-query Photos($filter: PhotosFilterInput) {
-  photos(filter: $filter) {
+#### Get Current User
+\`\`\`graphql
+query {
+  me {
     id
-    originalFilename
-    qualityScore
-    compositionScore
-    contentScore
-    isCurated
-    takenAt
+    email
+    firstName
+    lastName
+    preferences
+    createdAt
   }
 }
-```
+\`\`\`
 
-**Find Similar Photos**
-```graphql
-query SimilarPhotos($photoId: String!, $limit: Int) {
-  similarPhotos(photoId: $photoId, limit: $limit) {
+### Photo Management
+
+#### Get User's Photos
+\`\`\`graphql
+query {
+  myPhotos {
     id
-    originalFilename
-    qualityScore
+    filename
+    width
+    height
+    overallScore
+    technicalScore
+    faceCount
+    capturedAt
   }
 }
-```
+\`\`\`
 
-## File Upload
+## 🏗️ Architecture
 
-### Direct Upload
-```bash
-curl -X POST \
-  http://localhost:3000/upload/photo \
-  -H 'Authorization: Bearer <token>' \
-  -F 'file=@photo.jpg' \
-  -F 'metadata={"width":800,"height":600}'
-```
+### Database Schema
 
-### Presigned URL Upload
-```graphql
-mutation GetPresignedUrl {
-  # This would be implemented as a REST endpoint
-}
-```
+#### Users Table
+- User authentication and profile information
+- Preferences stored as JSONB
+- Subscription management
 
-## Development
+#### Photos Table
+- Photo metadata and file information
+- AI analysis results and scores
+- Visual embeddings for similarity search (pgvector)
+- User actions (favorites, tags, etc.)
 
-### Running the Application
+### GraphQL Schema
 
-```bash
-# Development mode with hot reload
-npm run start:dev
+The API uses a code-first approach with NestJS decorators to generate the GraphQL schema automatically.
 
-# Production mode
+## 🔒 Security
+
+- **JWT Authentication** - Secure token-based authentication
+- **Password Hashing** - bcryptjs with salt rounds
+- **Input Validation** - class-validator for request validation
+- **CORS** - Configured for React Native app
+
+## 🚀 Deployment
+
+### Production Build
+
+\`\`\`bash
+npm run build
 npm run start:prod
+\`\`\`
 
-# Debug mode
-npm run start:debug
-```
+### Docker Deployment
 
-### Testing
+\`\`\`dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY dist ./dist
+EXPOSE 3000
+CMD ["node", "dist/main.js"]
+\`\`\`
 
-```bash
+### Environment Variables
+
+Make sure to set these environment variables in production:
+
+- \`DB_HOST\` - Database host
+- \`DB_PORT\` - Database port
+- \`DB_USERNAME\` - Database username
+- \`DB_PASSWORD\` - Database password
+- \`DB_NAME\` - Database name
+- \`JWT_SECRET\` - JWT signing secret
+- \`NODE_ENV=production\`
+
+## 📈 Future Enhancements
+
+### Phase 2 Features
+- **File Upload API** - Direct photo upload to cloud storage
+- **Real-time Sync** - WebSocket-based real-time synchronization
+- **Advanced Search** - Vector similarity search with pgvector
+- **Batch Operations** - Bulk photo operations
+
+### Phase 3 Features
+- **Caching Layer** - Redis for improved performance
+- **Rate Limiting** - API rate limiting and throttling
+- **Analytics** - Usage analytics and metrics
+- **Admin Dashboard** - Administrative interface
+
+## 🧪 Testing
+
+\`\`\`bash
 # Unit tests
 npm run test
 
 # E2E tests
 npm run test:e2e
 
-# Test coverage
+# Coverage
 npm run test:cov
+\`\`\`
 
-# Watch mode
-npm run test:watch
-```
+## 📝 License
 
-### Code Quality
-
-```bash
-# Linting
-npm run lint
-
-# Formatting
-npm run format
-```
-
-## Deployment
-
-### Docker Deployment
-
-```dockerfile
-FROM node:18-alpine
-
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-
-COPY . .
-RUN npm run build
-
-EXPOSE 3000
-CMD ["node", "dist/main"]
-```
-
-### Environment Setup
-
-1. **Production Database**
-   - Set up PostgreSQL with pgvector extension
-   - Configure connection pooling
-   - Set up database backups
-
-2. **AWS Configuration**
-   - Create S3 bucket with appropriate permissions
-   - Set up IAM roles for secure access
-   - Configure CORS for mobile app access
-
-3. **Security**
-   - Use strong JWT secrets
-   - Enable HTTPS in production
-   - Configure rate limiting
-   - Set up monitoring and logging
-
-## API Endpoints
-
-### REST Endpoints
-
-- `POST /upload/photo` - Direct file upload
-- `POST /upload/presigned-url` - Get presigned upload URL
-- `GET /upload/signed-url/:photoId` - Get signed download URL
-
-### GraphQL Endpoints
-
-- `/graphql` - Main GraphQL endpoint
-- Schema available at `/graphql` in development mode
-
-## Performance Considerations
-
-- **Vector Similarity Search**: Uses pgvector for efficient similarity queries
-- **File Upload**: Supports both direct upload and presigned URLs
-- **Caching**: Implement Redis for session and query caching
-- **Database Indexing**: Proper indexes on frequently queried fields
-- **Connection Pooling**: Configure TypeORM connection pooling
-
-## Security Features
-
-- **JWT Authentication**: Secure token-based authentication
-- **Input Validation**: Class-validator for request validation
-- **SQL Injection Protection**: TypeORM query builder
-- **File Upload Security**: MIME type validation and size limits
-- **CORS Configuration**: Configurable cross-origin resource sharing
-
-## Monitoring and Logging
-
-- **Health Checks**: Built-in health check endpoints
-- **Error Handling**: Global exception filters
-- **Request Logging**: Configurable request/response logging
-- **Performance Metrics**: Integration with monitoring services
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Ensure all tests pass
-6. Submit a pull request
-
-## License
-
-This project is licensed under the MIT License.
+MIT License - see LICENSE file for details.

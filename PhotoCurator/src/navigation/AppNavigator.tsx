@@ -1,29 +1,25 @@
 import React from 'react';
-import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
-import {createStackNavigator} from '@react-navigation/stack';
+import { NavigationContainer } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createStackNavigator } from '@react-navigation/stack';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import {HomeScreen} from '../screens/HomeScreen';
-import {LibraryScreen} from '../screens/LibraryScreen';
-import {CurationScreen} from '../screens/CurationScreen';
-import {SettingsScreen} from '../screens/SettingsScreen';
-import PhotoImportScreen from '../screens/PhotoImportScreen';
+// Import screens (will be created next)
+import { ImportScreen } from '../screens/ImportScreen';
+import { AnalyzeScreen } from '../screens/AnalyzeScreen';
+import { CurateScreen } from '../screens/CurateScreen';
+import { ReviewScreen } from '../screens/ReviewScreen';
+import { PhotoDetailScreen } from '../screens/PhotoDetailScreen';
+import { SettingsScreen } from '../screens/SettingsScreen';
+import { OnboardingScreen } from '../screens/OnboardingScreen';
 
-export type RootTabParamList = {
-  Home: undefined;
-  Library: undefined;
-  Curation: undefined;
-  Settings: undefined;
-};
+// Import icons (placeholder for now)
+import { TabBarIcon } from '../components/ui/TabBarIcon';
 
-export type RootStackParamList = {
-  Main: undefined;
-  PhotoDetail: {photoId: string};
-  Import: undefined;
-  EditPhoto: {photoId: string};
-};
+import { RootStackParamList, MainTabParamList } from '../types';
 
-const Tab = createBottomTabNavigator<RootTabParamList>();
 const Stack = createStackNavigator<RootStackParamList>();
+const Tab = createBottomTabNavigator<MainTabParamList>();
 
 const MainTabNavigator: React.FC = () => {
   return (
@@ -32,37 +28,59 @@ const MainTabNavigator: React.FC = () => {
         headerShown: false,
         tabBarStyle: {
           backgroundColor: '#000',
-          borderTopColor: '#333',
+          borderTopColor: '#1a1a1a',
+          borderTopWidth: 1,
+          paddingTop: 8,
+          paddingBottom: 8,
+          height: 88,
         },
         tabBarActiveTintColor: '#007AFF',
         tabBarInactiveTintColor: '#8E8E93',
-      }}>
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '500',
+          marginTop: 4,
+        },
+      }}
+    >
       <Tab.Screen
-        name="Home"
-        component={HomeScreen}
+        name="Import"
+        component={ImportScreen}
         options={{
-          tabBarLabel: 'Home',
+          tabBarLabel: 'Import',
+          tabBarIcon: ({ focused, color }) => (
+            <TabBarIcon name="photo" focused={focused} color={color} />
+          ),
         }}
       />
       <Tab.Screen
-        name="Library"
-        component={LibraryScreen}
+        name="Analyze"
+        component={AnalyzeScreen}
         options={{
-          tabBarLabel: 'Library',
+          tabBarLabel: 'Analyze',
+          tabBarIcon: ({ focused, color }) => (
+            <TabBarIcon name="cpu" focused={focused} color={color} />
+          ),
         }}
       />
       <Tab.Screen
-        name="Curation"
-        component={CurationScreen}
+        name="Curate"
+        component={CurateScreen}
         options={{
-          tabBarLabel: 'Curation',
+          tabBarLabel: 'Curate',
+          tabBarIcon: ({ focused, color }) => (
+            <TabBarIcon name="sparkles" focused={focused} color={color} />
+          ),
         }}
       />
       <Tab.Screen
-        name="Settings"
-        component={SettingsScreen}
+        name="Review"
+        component={ReviewScreen}
         options={{
-          tabBarLabel: 'Settings',
+          tabBarLabel: 'Review',
+          tabBarIcon: ({ focused, color }) => (
+            <TabBarIcon name="check-circle" focused={focused} color={color} />
+          ),
         }}
       />
     </Tab.Navigator>
@@ -71,23 +89,73 @@ const MainTabNavigator: React.FC = () => {
 
 export const AppNavigator: React.FC = () => {
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerShown: false,
-      }}>
-      <Stack.Screen name="Main" component={MainTabNavigator} />
-      <Stack.Screen 
-        name="Import" 
-        component={PhotoImportScreen}
-        options={{
-          headerShown: true,
-          title: 'Import Photos',
-          headerStyle: {
-            backgroundColor: '#000',
+    <SafeAreaProvider>
+      <NavigationContainer
+        theme={{
+          dark: true,
+          colors: {
+            primary: '#007AFF',
+            background: '#000',
+            card: '#1a1a1a',
+            text: '#fff',
+            border: '#333',
+            notification: '#FF3B30',
           },
-          headerTintColor: '#fff',
         }}
-      />
-    </Stack.Navigator>
+      >
+        <Stack.Navigator
+          screenOptions={{
+            headerStyle: {
+              backgroundColor: '#000',
+              borderBottomColor: '#1a1a1a',
+              borderBottomWidth: 1,
+            },
+            headerTintColor: '#fff',
+            headerTitleStyle: {
+              fontWeight: '600',
+              fontSize: 18,
+            },
+            headerBackTitleVisible: false,
+            gestureEnabled: true,
+            cardStyle: { backgroundColor: '#000' },
+          }}
+        >
+          <Stack.Screen
+            name="Onboarding"
+            component={OnboardingScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Main"
+            component={MainTabNavigator}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="PhotoDetail"
+            component={PhotoDetailScreen}
+            options={{
+              title: 'Photo Details',
+              presentation: 'modal',
+            }}
+          />
+          <Stack.Screen
+            name="CurationSession"
+            component={CurateScreen} // Will be enhanced for session view
+            options={{
+              title: 'Curation Session',
+              presentation: 'fullScreenModal',
+            }}
+          />
+          <Stack.Screen
+            name="Settings"
+            component={SettingsScreen}
+            options={{
+              title: 'Settings',
+              presentation: 'modal',
+            }}
+          />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 };

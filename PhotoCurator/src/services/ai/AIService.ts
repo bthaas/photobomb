@@ -1,40 +1,16 @@
-import { TensorFlowSetup } from './TensorFlowSetup';
-import { ModelManager, ModelConfig, ModelLoadResult, ModelDownloadProgress } from './ModelManager';
-import { ModelErrorHandler, ModelError } from './ModelErrorHandler';
+import * as tf from '@tensorflow/tfjs';
+import '@tensorflow/tfjs-react-native';
+import { Photo, PhotoAnalysis, FaceDetection, AIModel } from '../../types';
+import { useAppStore } from '../../store/appStore';
 
-export interface AIServiceStatus {
-  isInitialized: boolean;
-  backend: string;
-  loadedModels: string[];
-  availableModels: ModelConfig[];
-  memoryUsage?: any;
-  lastError?: ModelError;
-}
-
-export interface ModelLoadOptions {
-  priority?: 'high' | 'medium' | 'low';
-  timeout?: number;
-  onProgress?: (progress: ModelDownloadProgress) => void;
-  onError?: (error: ModelError) => void;
-}
-
-/**
- * Main AI service that orchestrates TensorFlow.js setup and model management
- * Provides a unified interface for all AI-related operations
- */
 export class AIService {
   private static instance: AIService;
-  private modelManager: ModelManager;
-  private errorHandler: ModelErrorHandler;
+  private models: Map<string, tf.LayersModel | tf.GraphModel> = new Map();
   private isInitialized = false;
-  private initializationPromise: Promise<void> | null = null;
 
-  private constructor() {
-    this.modelManager = ModelManager.getInstance();
-    this.errorHandler = ModelErrorHandler.getInstance();
-  }
+  private constructor() {}
 
-  static getInstance(): AIService {
+  public static getInstance(): AIService {
     if (!AIService.instance) {
       AIService.instance = new AIService();
     }
@@ -42,33 +18,20 @@ export class AIService {
   }
 
   /**
-   * Initialize the AI service
+   * Initialize TensorFlow.js and load core models
    */
   async initialize(): Promise<void> {
-    if (this.isInitialized) {
-      return;
-    }
+    if (this.isInitialized) return;
 
-    if (this.initializationPromise) {
-      return this.initializationPromise;
-    }
-
-    this.initializationPromise = this.performInitialization();
-    return this.initializationPromise;
-  }
-
-  private async performInitialization(): Promise<void> {
     try {
-      console.log('Initializing AI Service...');
-      
-      // Initialize TensorFlow.js
-      await TensorFlowSetup.initialize();
-      
-      // Clean up old cached models if needed
-      await this.modelManager.cleanupCache();
-      
+      // Initialize TensorFlow.js platform
+      await tf.ready();
+      console.log('TensorFlow.js initialized');
+
+      // Set backend (will use the best available: webgl, cpu, etc.)
+      console.log('TensorFlow.js backend:', tf.getBackend());
+
       this.isInitialized = true;
-      console.log('AI Service initialized successfully');
     } catch (error) {
       console.error('Failed to initialize AI Service:', error);
       throw error;
@@ -76,222 +39,360 @@ export class AIService {
   }
 
   /**
-   * Load a model with error handling and retry logic
+   * Load a specific AI model
    */
-  async loadModel(modelName: string, options: ModelLoadOptions = {}): Promise<ModelLoadResult> {
-    await this.initialize();
+  async loadModel(modelConfig: AIModel): Promise<void> {
+    const { updateModelStatus } = useAppStore.getState();
 
-    const { timeout = 30000, onProgress, onError } = options;
-    let attemptNumber = 1;
-
-    while (true) {
-      try {
-        // Set timeout for model loading
-        const loadPromise = this.modelManager.loadModel(modelName, onProgress);
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Model loading timeout')), timeout);
-        });
-
-        const result = await Promise.race([loadPromise, timeoutPromise]);
-        
-        console.log(`Model ${modelName} loaded successfully (attempt ${attemptNumber})`);
-        return result;
-      } catch (error) {
-        const errorResult = await this.errorHandler.handleModelError(
-          error as Error,
-          modelName,
-          attemptNumber
-        );
-
-        if (onError) {
-          const modelError = {
-            type: 'NETWORK_ERROR' as any,
-            message: (error as Error).message,
-            modelName,
-            originalError: error as Error,
-            timestamp: new Date(),
-            retryable: errorResult.shouldRetry,
-          };
-          onError(modelError);
-        }
-
-        if (errorResult.shouldRetry) {
-          console.log(`Retrying model ${modelName} load in ${errorResult.delay}ms (attempt ${attemptNumber + 1})`);
-          await this.delay(errorResult.delay);
-          attemptNumber++;
-          continue;
-        }
-
-        if (errorResult.fallbackModel) {
-          console.log(`Loading fallback model ${errorResult.fallbackModel} for ${modelName}`);
-          return this.loadModel(errorResult.fallbackModel, options);
-        }
-
-        throw error;
-      }
-    }
-  }
-
-  /**
-   * Load multiple models concurrently
-   */
-  async loadModels(
-    modelNames: string[],
-    options: ModelLoadOptions = {}
-  ): Promise<Map<string, ModelLoadResult>> {
-    await this.initialize();
-
-    const results = new Map<string, ModelLoadResult>();
-    const loadPromises = modelNames.map(async (modelName) => {
-      try {
-        const result = await this.loadModel(modelName, options);
-        results.set(modelName, result);
-      } catch (error) {
-        console.error(`Failed to load model ${modelName}:`, error);
-        // Continue loading other models even if one fails
-      }
-    });
-
-    await Promise.allSettled(loadPromises);
-    return results;
-  }
-
-  /**
-   * Preload essential models for core functionality
-   */
-  async preloadEssentialModels(onProgress?: (progress: ModelDownloadProgress) => void): Promise<void> {
-    const essentialModels = ['feature-extraction']; // Start with most critical model
-    
     try {
-      await this.loadModel('feature-extraction', { onProgress });
-      console.log('Essential models preloaded successfully');
+      updateModelStatus(modelConfig.name, { isLoaded: false });
+
+      let model: tf.LayersModel | tf.GraphModel;
+
+      // For now, we'll create placeholder models since we don't have actual model URLs
+      // In production, these would be real pre-trained models
+      switch (modelConfig.type) {
+        case 'face_detection':
+          model = await this.createPlaceholderFaceDetectionModel();
+          break;
+        case 'quality_assessment':
+          model = await this.createPlaceholderQualityModel();
+          break;
+        default:
+          throw new Error(`Unknown model type: ${modelConfig.type}`);
+      }
+
+      this.models.set(modelConfig.name, model);
+      updateModelStatus(modelConfig.name, { isLoaded: true });
+      
+      console.log(`Model ${modelConfig.name} loaded successfully`);
     } catch (error) {
-      console.warn('Failed to preload essential models:', error);
-      // Don't throw error as app can still function with degraded features
+      console.error(`Failed to load model ${modelConfig.name}:`, error);
+      updateModelStatus(modelConfig.name, { isLoaded: false });
+      throw error;
     }
   }
 
   /**
-   * Load models on demand based on required features
+   * Analyze a photo using all available AI models
    */
-  async loadModelsForFeatures(features: string[]): Promise<void> {
-    const requiredModels = new Set<string>();
-    const availableModels = this.modelManager.getAvailableModels();
+  async analyzePhoto(photo: Photo): Promise<PhotoAnalysis> {
+    if (!this.isInitialized) {
+      await this.initialize();
+    }
 
-    // Determine which models are needed for the requested features
-    for (const model of availableModels) {
-      if (model.requiredFor.some(feature => features.includes(feature))) {
-        requiredModels.add(model.name);
+    try {
+      // Load image as tensor
+      const imageTensor = await this.loadImageAsTensor(photo.uri);
+      
+      // Run all analysis in parallel
+      const [
+        technicalScores,
+        compositionalScores,
+        contentScores,
+        faces,
+        visualEmbedding
+      ] = await Promise.all([
+        this.analyzeTechnicalQuality(imageTensor),
+        this.analyzeComposition(imageTensor),
+        this.analyzeContent(imageTensor),
+        this.detectFaces(imageTensor),
+        this.extractVisualEmbedding(imageTensor)
+      ]);
+
+      // Calculate overall score
+      const overallScore = this.calculateOverallScore({
+        ...technicalScores,
+        ...compositionalScores,
+        ...contentScores
+      });
+
+      // Clean up tensor
+      imageTensor.dispose();
+
+      const analysis: PhotoAnalysis = {
+        // Technical Quality
+        sharpnessScore: technicalScores.sharpnessScore,
+        exposureScore: technicalScores.exposureScore,
+        colorBalanceScore: technicalScores.colorBalanceScore,
+        
+        // Compositional Quality
+        compositionScore: compositionalScores.compositionScore,
+        ruleOfThirdsScore: compositionalScores.ruleOfThirdsScore,
+        
+        // Content Quality
+        faceCount: faces.length,
+        smileScore: contentScores.smileScore,
+        eyesOpenScore: contentScores.eyesOpenScore,
+        emotionalScore: contentScores.emotionalScore,
+        
+        // Overall
+        overallScore,
+        
+        // Detected Features
+        faces,
+        objects: [], // Will be implemented later
+        
+        // Clustering
+        visualEmbedding,
+        
+        // Status
+        isAnalyzed: true,
+        analysisTimestamp: Date.now(),
+      };
+
+      return analysis;
+    } catch (error) {
+      console.error('Failed to analyze photo:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Batch analyze multiple photos
+   */
+  async analyzePhotos(
+    photos: Photo[],
+    onProgress?: (progress: number) => void
+  ): Promise<Photo[]> {
+    const analyzedPhotos: Photo[] = [];
+    
+    for (let i = 0; i < photos.length; i++) {
+      const photo = photos[i];
+      
+      try {
+        const analysis = await this.analyzePhoto(photo);
+        analyzedPhotos.push({
+          ...photo,
+          aiAnalysis: analysis,
+        });
+      } catch (error) {
+        console.error(`Failed to analyze photo ${photo.id}:`, error);
+        // Add photo without analysis
+        analyzedPhotos.push(photo);
+      }
+      
+      // Report progress
+      if (onProgress) {
+        onProgress((i + 1) / photos.length);
       }
     }
-
-    // Load required models
-    const modelNames = Array.from(requiredModels);
-    if (modelNames.length > 0) {
-      console.log(`Loading models for features [${features.join(', ')}]: [${modelNames.join(', ')}]`);
-      await this.loadModels(modelNames);
-    }
+    
+    return analyzedPhotos;
   }
 
   /**
-   * Get the current status of the AI service
+   * Detect and remove duplicates based on visual similarity
    */
-  getStatus(): AIServiceStatus {
-    const backendInfo = TensorFlowSetup.getBackendInfo();
-    const availableModels = this.modelManager.getAvailableModels();
-    const loadedModels = availableModels
-      .filter(model => this.modelManager.isModelLoaded(model.name))
-      .map(model => model.name);
+  async detectDuplicates(photos: Photo[]): Promise<Photo[][]> {
+    // Extract visual embeddings for all photos
+    const embeddings: { photo: Photo; embedding: number[] }[] = [];
+    
+    for (const photo of photos) {
+      if (photo.aiAnalysis?.visualEmbedding) {
+        embeddings.push({
+          photo,
+          embedding: photo.aiAnalysis.visualEmbedding,
+        });
+      }
+    }
+    
+    // Find similar photos using cosine similarity
+    const duplicateGroups: Photo[][] = [];
+    const processed = new Set<string>();
+    
+    for (const item of embeddings) {
+      if (processed.has(item.photo.id)) continue;
+      
+      const similarPhotos = [item.photo];
+      processed.add(item.photo.id);
+      
+      for (const other of embeddings) {
+        if (processed.has(other.photo.id)) continue;
+        
+        const similarity = this.cosineSimilarity(item.embedding, other.embedding);
+        
+        // If similarity is above threshold (0.9), consider as duplicate
+        if (similarity > 0.9) {
+          similarPhotos.push(other.photo);
+          processed.add(other.photo.id);
+        }
+      }
+      
+      if (similarPhotos.length > 1) {
+        duplicateGroups.push(similarPhotos);
+      }
+    }
+    
+    return duplicateGroups;
+  }
 
+  // Private helper methods
+
+  private async loadImageAsTensor(uri: string): Promise<tf.Tensor3D> {
+    // In a real implementation, this would load the image from URI
+    // For now, return a placeholder tensor
+    return tf.randomNormal([224, 224, 3]) as tf.Tensor3D;
+  }
+
+  private async analyzeTechnicalQuality(imageTensor: tf.Tensor3D): Promise<{
+    sharpnessScore: number;
+    exposureScore: number;
+    colorBalanceScore: number;
+  }> {
+    // Placeholder implementation
+    // Real implementation would use computer vision algorithms
     return {
-      isInitialized: this.isInitialized && backendInfo.isInitialized,
-      backend: backendInfo.backend,
-      loadedModels,
-      availableModels,
-      memoryUsage: backendInfo.memoryInfo,
+      sharpnessScore: Math.random() * 0.3 + 0.7, // 0.7-1.0
+      exposureScore: Math.random() * 0.4 + 0.6,  // 0.6-1.0
+      colorBalanceScore: Math.random() * 0.5 + 0.5, // 0.5-1.0
     };
   }
 
-  /**
-   * Get a loaded model
-   */
-  getModel(modelName: string) {
-    return this.modelManager.getLoadedModel(modelName);
+  private async analyzeComposition(imageTensor: tf.Tensor3D): Promise<{
+    compositionScore: number;
+    ruleOfThirdsScore: number;
+  }> {
+    // Placeholder implementation
+    return {
+      compositionScore: Math.random() * 0.4 + 0.6,
+      ruleOfThirdsScore: Math.random() * 0.6 + 0.4,
+    };
   }
 
-  /**
-   * Check if a model is loaded and ready
-   */
-  isModelReady(modelName: string): boolean {
-    return this.modelManager.isModelLoaded(modelName);
+  private async analyzeContent(imageTensor: tf.Tensor3D): Promise<{
+    smileScore: number;
+    eyesOpenScore: number;
+    emotionalScore: number;
+  }> {
+    // Placeholder implementation
+    return {
+      smileScore: Math.random(),
+      eyesOpenScore: Math.random() * 0.3 + 0.7,
+      emotionalScore: Math.random() * 0.4 + 0.6,
+    };
   }
 
-  /**
-   * Unload a model to free memory
-   */
-  async unloadModel(modelName: string): Promise<void> {
-    await this.modelManager.unloadModel(modelName);
-  }
-
-  /**
-   * Get cache statistics
-   */
-  async getCacheStats() {
-    return this.modelManager.getCacheStats();
-  }
-
-  /**
-   * Clean up resources
-   */
-  async cleanup(): Promise<void> {
-    await this.modelManager.clearAllModels();
-    TensorFlowSetup.cleanup();
-    this.isInitialized = false;
-    this.initializationPromise = null;
-  }
-
-  /**
-   * Get error statistics for troubleshooting
-   */
-  getErrorStats(modelName?: string) {
-    if (modelName) {
-      return this.errorHandler.getModelErrorStats(modelName);
+  private async detectFaces(imageTensor: tf.Tensor3D): Promise<FaceDetection[]> {
+    // Placeholder implementation
+    const faceCount = Math.floor(Math.random() * 4); // 0-3 faces
+    const faces: FaceDetection[] = [];
+    
+    for (let i = 0; i < faceCount; i++) {
+      faces.push({
+        id: `face_${i}`,
+        boundingBox: {
+          x: Math.random() * 200,
+          y: Math.random() * 200,
+          width: 50 + Math.random() * 100,
+          height: 50 + Math.random() * 100,
+        },
+        confidence: Math.random() * 0.3 + 0.7,
+      });
     }
     
-    // Return stats for all models
-    const availableModels = this.modelManager.getAvailableModels();
-    const stats: Record<string, any> = {};
+    return faces;
+  }
+
+  private async extractVisualEmbedding(imageTensor: tf.Tensor3D): Promise<number[]> {
+    // Placeholder implementation - would use a feature extraction model
+    return Array.from({ length: 128 }, () => Math.random() * 2 - 1);
+  }
+
+  private calculateOverallScore(scores: {
+    sharpnessScore: number;
+    exposureScore: number;
+    colorBalanceScore: number;
+    compositionScore: number;
+    ruleOfThirdsScore: number;
+    smileScore: number;
+    eyesOpenScore: number;
+    emotionalScore: number;
+  }): number {
+    const weights = {
+      technical: 0.3,
+      compositional: 0.3,
+      content: 0.4,
+    };
     
-    for (const model of availableModels) {
-      stats[model.name] = this.errorHandler.getModelErrorStats(model.name);
+    const technicalScore = (
+      scores.sharpnessScore * 0.4 +
+      scores.exposureScore * 0.3 +
+      scores.colorBalanceScore * 0.3
+    );
+    
+    const compositionalScore = (
+      scores.compositionScore * 0.6 +
+      scores.ruleOfThirdsScore * 0.4
+    );
+    
+    const contentScore = (
+      scores.smileScore * 0.3 +
+      scores.eyesOpenScore * 0.3 +
+      scores.emotionalScore * 0.4
+    );
+    
+    return (
+      technicalScore * weights.technical +
+      compositionalScore * weights.compositional +
+      contentScore * weights.content
+    );
+  }
+
+  private cosineSimilarity(a: number[], b: number[]): number {
+    if (a.length !== b.length) return 0;
+    
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+    
+    for (let i = 0; i < a.length; i++) {
+      dotProduct += a[i] * b[i];
+      normA += a[i] * a[i];
+      normB += b[i] * b[i];
     }
     
-    return stats;
+    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
   }
 
-  /**
-   * Get user-friendly error message
-   */
-  getUserFriendlyErrorMessage(modelName: string): string | null {
-    const stats = this.errorHandler.getModelErrorStats(modelName);
-    if (stats.lastError) {
-      return this.errorHandler.getUserFriendlyMessage(modelName, stats.lastError);
-    }
-    return null;
+  // Placeholder model creation methods
+  private async createPlaceholderFaceDetectionModel(): Promise<tf.LayersModel> {
+    const model = tf.sequential({
+      layers: [
+        tf.layers.conv2d({
+          inputShape: [224, 224, 3],
+          filters: 32,
+          kernelSize: 3,
+          activation: 'relu',
+        }),
+        tf.layers.maxPooling2d({ poolSize: 2 }),
+        tf.layers.flatten(),
+        tf.layers.dense({ units: 64, activation: 'relu' }),
+        tf.layers.dense({ units: 4 }), // x, y, width, height
+      ],
+    });
+    
+    return model;
   }
 
-  /**
-   * Get recovery actions for model errors
-   */
-  getRecoveryActions(modelName: string): string[] {
-    const stats = this.errorHandler.getModelErrorStats(modelName);
-    if (stats.lastError) {
-      return this.errorHandler.getRecoveryActions(stats.lastError);
-    }
-    return [];
-  }
-
-  private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  private async createPlaceholderQualityModel(): Promise<tf.LayersModel> {
+    const model = tf.sequential({
+      layers: [
+        tf.layers.conv2d({
+          inputShape: [224, 224, 3],
+          filters: 16,
+          kernelSize: 3,
+          activation: 'relu',
+        }),
+        tf.layers.maxPooling2d({ poolSize: 2 }),
+        tf.layers.flatten(),
+        tf.layers.dense({ units: 32, activation: 'relu' }),
+        tf.layers.dense({ units: 1, activation: 'sigmoid' }), // Quality score 0-1
+      ],
+    });
+    
+    return model;
   }
 }
+
+export const aiService = AIService.getInstance();
