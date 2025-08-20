@@ -1,0 +1,55 @@
+service: ai-photo-curator-backend
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+  
+  environment:
+    OPENAI_API_KEY: ${env:OPENAI_API_KEY}
+    GOOGLE_API_KEY: ${env:GOOGLE_API_KEY}
+    AI_PROVIDER: ${env:AI_PROVIDER, 'openai'}
+    NODE_ENV: ${self:provider.stage}
+
+  httpApi:
+    cors:
+      allowedOrigins:
+        - '*'
+      allowedHeaders:
+        - Content-Type
+        - Authorization
+      allowedMethods:
+        - GET
+        - POST
+        - OPTIONS
+
+functions:
+  api:
+    handler: dist/lambda.handler
+    timeout: 120
+    memorySize: 512
+    events:
+      - httpApi:
+          path: /{proxy+}
+          method: ANY
+      - httpApi:
+          path: /
+          method: ANY
+
+plugins:
+  - serverless-plugin-typescript
+  - serverless-offline
+
+custom:
+  serverless-offline:
+    httpPort: 3000
+
+package:
+  exclude:
+    - src/**
+    - test/**
+    - '*.md'
+    - tsconfig.json
